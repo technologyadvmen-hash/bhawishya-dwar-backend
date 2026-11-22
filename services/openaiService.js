@@ -42,8 +42,8 @@ Detect and analyze the following palm features. Return a JSON object with EXACTL
 
 Be honest — if image is blurry or palm is not clearly visible, set detected: false and low confidence. Only report what you can actually see.`;
 
-  const isS3Url = imageUrl.startsWith('https://');
-  const messageContent = isS3Url
+  const isValidUrl = imageUrl.startsWith('https://') || imageUrl.startsWith('data:image');
+  const messageContent = isValidUrl
     ? [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: imageUrl, detail: 'high' } }]
     : [{ type: 'text', text: prompt + '\n\nNote: Image not accessible, provide estimated analysis based on typical palm.' }];
 

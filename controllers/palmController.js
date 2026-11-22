@@ -13,16 +13,17 @@ export const uploadPalm = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "handType must be 'left' or 'right'" });
 
     let key, url;
+    // Store base64 as fallback so OpenAI can always analyze
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
     try {
       const s3Result = await uploadToS3(req.file.buffer, req.file.mimetype, "palm-images");
       key = s3Result.key;
       url = s3Result.url;
     } catch (s3Error) {
-      // S3 unavailable — use placeholder so app keeps working
-      console.warn("[S3 Warning] Upload failed, using placeholder:", s3Error.message);
+      console.warn("[S3 Warning] Upload failed, using base64:", s3Error.message);
       key = `palm-images/${uuidv4()}.jpg`;
-      url = `local://${key}`;
+      url = base64; // Use base64 so OpenAI can still analyze
     }
 
     const scan = await PalmScan.create({
