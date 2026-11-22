@@ -33,7 +33,7 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.options("*", cors());
+app.options("*splat", cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
