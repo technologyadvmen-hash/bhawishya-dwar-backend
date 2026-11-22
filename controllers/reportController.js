@@ -1,6 +1,7 @@
 import PalmReport from "../models/PalmReport.js";
 import AstrologyReport from "../models/AstrologyReport.js";
 import { deleteFromS3 } from "../services/s3Service.js";
+import { generatePalmReportPDF } from "../services/pdfService.js";
 
 // GET /api/reports
 export const getReports = async (req, res, next) => {
@@ -8,9 +9,9 @@ export const getReports = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const { type } = req.query; // 'palm' or 'astrology'
+    const { type } = req.query;
 
-    let palmReports = [], astrologyReports = [], total = 0;
+    let palmReports = [], astrologyReports = [];
 
     if (!type || type === "palm") {
       palmReports = await PalmReport.find({ user: req.user._id })
@@ -61,10 +62,43 @@ export const deleteReport = async (req, res, next) => {
     const report = await PalmReport.findOne({ _id: req.params.id, user: req.user._id });
     if (!report) return res.status(404).json({ success: false, message: "Report not found" });
 
-    if (report.pdfS3Key) await deleteFromS3(report.pdfS3Key);
+    if (report.pdfS3Key) await deleteFromS3(report.pdfS3Key).catch(() => {});
     await report.deleteOne();
 
     res.json({ success: true, message: "Report deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/reports/:id/download?lang=en|hi
+export const downloadReport = async (req, res, next) => {
+  try {
+    const lang = ["en", "hi"].includes(req.query.lang) ? req.query.lang : "en";
+
+    // Try palm report first
+    let report = await PalmReport.findOne({ _id: req.params.id, user: req.user._id }).populate("features").lean();
+
+    if (!report) {
+      return res.status(404).json({ success: false, message: "Report not found or not a palm report" });
+    }
+
+    const pdfBuffer = await generatePalmReportPDF(report, lang);
+
+    const safeTitle = (report.title || "palm-report")
+      .replace(/[^a-zA-Z0-9\u0900-\u097F\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .substring(0, 60);
+
+    const filename = `${safeTitle}-${lang}-${Date.now()}.pdf`;
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": pdfBuffer.length,
+    });
+
+    res.send(pdfBuffer);
   } catch (error) {
     next(error);
   }

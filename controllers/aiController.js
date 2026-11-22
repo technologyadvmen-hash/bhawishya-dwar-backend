@@ -9,13 +9,13 @@ import { generatePalmReading, chatWithAI } from "../services/openaiService.js";
 export const generateReading = async (req, res, next) => {
   try {
     const { scanId, reportType = "general", language } = req.body;
-    const lang = language || req.user.language || "en";
+    const lang = ["en", "hi"].includes(language) ? language : (req.user.language || "en");
 
     const scan = await PalmScan.findOne({ _id: scanId, user: req.user._id });
     if (!scan) return res.status(404).json({ success: false, message: "Scan not found" });
 
     const features = await PalmFeature.findOne({ scan: scanId });
-    if (!features) return res.status(400).json({ success: false, message: "Palm features not analyzed yet" });
+    if (!features) return res.status(400).json({ success: false, message: "Palm features not analyzed yet. Run analysis first." });
 
     const { content, tokensUsed, model } = await generatePalmReading(features, reportType, lang, req.user._id);
 
@@ -43,7 +43,7 @@ export const generateReading = async (req, res, next) => {
 export const chat = async (req, res, next) => {
   try {
     const { message, sessionId, language, palmContext } = req.body;
-    const lang = language || req.user.language || "en";
+    const lang = ["en", "hi"].includes(language) ? language : (req.user.language || "en");
 
     if (!message) return res.status(400).json({ success: false, message: "Message is required" });
 
@@ -64,16 +64,16 @@ export const chat = async (req, res, next) => {
 
     const messages = history.reverse().map((m) => ({ role: m.role, content: m.content }));
 
-    // Build palm context string if provided
     let palmContextStr = null;
     if (palmContext?.features) {
       const f = palmContext.features;
-      palmContextStr = `User's Palm Analysis:\n` +
-        `Life Line: ${f.lifeLine?.detected ? `Detected (${f.lifeLine.confidence}% confidence) - ${f.lifeLine.description}` : 'Not detected'}\n` +
-        `Heart Line: ${f.heartLine?.detected ? `Detected (${f.heartLine.confidence}% confidence) - ${f.heartLine.description}` : 'Not detected'}\n` +
-        `Head Line: ${f.headLine?.detected ? `Detected (${f.headLine.confidence}% confidence) - ${f.headLine.description}` : 'Not detected'}\n` +
-        `Fate Line: ${f.fateLine?.detected ? `Detected (${f.fateLine.confidence}% confidence) - ${f.fateLine.description}` : 'Not detected'}\n` +
-        `Palm Shape: ${f.palmShape || 'Unknown'}\nUse this data to answer questions about the user's palm.`;
+      palmContextStr =
+        `User's Palm Analysis:\n` +
+        `Life Line: ${f.lifeLine?.detected ? `Detected (${f.lifeLine.confidence}% confidence) - ${f.lifeLine.description}` : "Not detected"}\n` +
+        `Heart Line: ${f.heartLine?.detected ? `Detected (${f.heartLine.confidence}% confidence) - ${f.heartLine.description}` : "Not detected"}\n` +
+        `Head Line: ${f.headLine?.detected ? `Detected (${f.headLine.confidence}% confidence) - ${f.headLine.description}` : "Not detected"}\n` +
+        `Fate Line: ${f.fateLine?.detected ? `Detected (${f.fateLine.confidence}% confidence) - ${f.fateLine.description}` : "Not detected"}\n` +
+        `Palm Shape: ${f.palmShape || "Unknown"}\nUse this data to answer questions about the user's palm.`;
     }
 
     const { content: reply, tokensUsed } = await chatWithAI(messages, palmContextStr, lang, req.user._id);
@@ -89,6 +89,8 @@ export const chat = async (req, res, next) => {
     session.totalTokens += tokensUsed;
     session.messageCount += 2;
     await session.save();
+
+    await req.user.constructor.findByIdAndUpdate(req.user._id, { $inc: { chatCount: 1 } });
 
     res.json({ success: true, reply, sessionId: session._id, message: assistantMsg });
   } catch (error) {
