@@ -153,7 +153,10 @@ IMPORTANT: Only interpret detected features. Mark undetected features as "Not cl
 
 export const chatWithAI = async (messages, systemContext, language, userId) => {
   const lang = language === "hi" ? "Hindi" : "English";
-  const systemPrompt = `You are Bhawishya Dwar AI by SAVITRAM Foundation, an expert AI palmist and astrologer. Always respond in ${lang}. 
+  const langInstruction = language === "hi"
+    ? "IMPORTANT: You MUST respond ONLY in Hindi (Devanagari script). Do not use English at all."
+    : "IMPORTANT: You MUST respond ONLY in English.";
+  const systemPrompt = `You are Bhawishya Dwar AI by SAVITRAM Foundation, an expert AI palmist and Vedic astrologer. ${langInstruction}
 ${systemContext || ""}
 Never claim certainty about future events. Present insights as traditional interpretations for self-reflection.`;
 

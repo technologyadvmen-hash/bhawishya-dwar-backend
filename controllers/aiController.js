@@ -42,7 +42,7 @@ export const generateReading = async (req, res, next) => {
 // POST /api/ai/chat
 export const chat = async (req, res, next) => {
   try {
-    const { message, sessionId, language } = req.body;
+    const { message, sessionId, language, palmContext } = req.body;
     const lang = language || req.user.language || "en";
 
     if (!message) return res.status(400).json({ success: false, message: "Message is required" });
@@ -55,10 +55,8 @@ export const chat = async (req, res, next) => {
       session = await ChatSession.create({ user: req.user._id, language: lang });
     }
 
-    // Save user message
     await ChatMessage.create({ session: session._id, user: req.user._id, role: "user", content: message });
 
-    // Get last 10 messages for context
     const history = await ChatMessage.find({ session: session._id })
       .sort({ createdAt: -1 })
       .limit(10)
@@ -66,7 +64,19 @@ export const chat = async (req, res, next) => {
 
     const messages = history.reverse().map((m) => ({ role: m.role, content: m.content }));
 
-    const { content: reply, tokensUsed } = await chatWithAI(messages, null, lang, req.user._id);
+    // Build palm context string if provided
+    let palmContextStr = null;
+    if (palmContext?.features) {
+      const f = palmContext.features;
+      palmContextStr = `User's Palm Analysis:\n` +
+        `Life Line: ${f.lifeLine?.detected ? `Detected (${f.lifeLine.confidence}% confidence) - ${f.lifeLine.description}` : 'Not detected'}\n` +
+        `Heart Line: ${f.heartLine?.detected ? `Detected (${f.heartLine.confidence}% confidence) - ${f.heartLine.description}` : 'Not detected'}\n` +
+        `Head Line: ${f.headLine?.detected ? `Detected (${f.headLine.confidence}% confidence) - ${f.headLine.description}` : 'Not detected'}\n` +
+        `Fate Line: ${f.fateLine?.detected ? `Detected (${f.fateLine.confidence}% confidence) - ${f.fateLine.description}` : 'Not detected'}\n` +
+        `Palm Shape: ${f.palmShape || 'Unknown'}\nUse this data to answer questions about the user's palm.`;
+    }
+
+    const { content: reply, tokensUsed } = await chatWithAI(messages, palmContextStr, lang, req.user._id);
 
     const assistantMsg = await ChatMessage.create({
       session: session._id,
